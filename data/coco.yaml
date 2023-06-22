@@ -1,0 +1,11 @@
+
+train: tong_hop/images # train images (relative to 'path') 128 images
+val: tong_hop/images # val images (relative to 'path') 128 images
+#test:  # test images (optional)
+
+# Classes
+names:
+  0: pulpmold
+  1: printer
+  2: emptybox
+

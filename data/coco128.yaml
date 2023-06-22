@@ -1,0 +1,11 @@
+
+train: data_train/tong_hop_train_val/train/images # train images (relative to 'path') 128 images
+val: data_train/tong_hop_train_val/val/images # val images (relative to 'path') 128 images
+#test: data_train/q.v1i.yolov5pytorch/test/images # test images (optional)
+
+# Classes
+names:
+  0: xop_duoi
+  1: printer
+  2: box
+  3: xop_tren
