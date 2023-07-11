@@ -2,7 +2,7 @@
 """
 Dataloaders and dataset utils
 """
-
+from datetime import datetime
 import contextlib
 import glob
 import hashlib
@@ -34,6 +34,7 @@ from utils.general import (DATASETS_DIR, LOGGER, NUM_THREADS, TQDM_BAR_FORMAT, c
                            check_yaml, clean_str, cv2, is_colab, is_kaggle, segments2boxes, unzip_file, xyn2xy,
                            xywh2xyxy, xywhn2xyxy, xyxy2xywhn)
 from utils.torch_utils import torch_distributed_zero_first
+
 
 # Parameters
 HELP_URL = 'See https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -278,7 +279,9 @@ class LoadImages:
         return self
 
     def __next__(self):
-        if self.count == self.nf or cv2.waitKey(1) == ord('q'):
+        if cv2.waitKey(1) == ord('q') or cv2.waitKey(1) == 27 or self.count == self.nf:  # q to quit,esc
+            cv2.destroyAllWindows()
+        # if self.count == self.nf:
             raise StopIteration
         path = self.files[self.count]
 
@@ -287,23 +290,13 @@ class LoadImages:
             self.mode = 'video'
             for _ in range(self.vid_stride):
                 self.cap.grab()
-            ret_val, im0 = self.cap.retrieve()
-            im0_copy = im0.copy()
-            im0_copy = cv2.rectangle(im0_copy,(630, 35), (1290, 775), (0, 0, 255),2)
-            cv2.putText(im0_copy, 'area check', (630, 70), cv2.FONT_HERSHEY_SIMPLEX, 2, (0, 0, 255), 2)
+            ret_val, im0 = self.cap.read ()
+            # huong add
             mask = np.zeros(im0.shape, dtype=np.uint8)
-            cv2.rectangle(mask, (620, 217), (1248, 662), (255, 255, 255), -1)
+            # cv2.rectangle(mask, (662, 186), (1108, 573), (255, 255, 255), -1)  # x:y, x:y   #cam .1.60 check xốp dưới
+            # cv2.rectangle(mask, (280, 55), (823, 352), (255, 255, 255), -1)                 #cam .1.56 check xốp trên
+            cv2.rectangle(mask, (393, 103), (1148, 610), (255, 255, 255), -1)               # add phuong
             im0 = cv2.bitwise_and(im0, mask)
-
-
-            # mask = np.zeros(im0.shape, dtype=np.uint8)
-            # # cv2.rectangle(mask, (550, 130), (1150, 590), (255, 255, 255), -1)  # x:y, x:y   #cam .1.60 check xốp dưới
-            # # cv2.rectangle(mask, (490, 35), (960, 320), (255, 255, 255), -1)                 #cam .1.56 check xốp trên
-            # cv2.rectangle(mask, (620, 217), (1248, 662), (255, 255, 255), -1)
-            # im0 = cv2.bitwise_and(im0, mask)
-
-
-
             while not ret_val:
                 self.count += 1
                 self.cap.release()
@@ -316,7 +309,8 @@ class LoadImages:
             self.frame += 1
             # im0 = self._cv2_rotate(im0)  # for use if cv2 autorotation is False
             # s = f'video {self.count + 1}/{self.nf} ({self.frame}/{self.frames}) {path}: '
-            s = ""
+            s = ''
+
         else:
             # Read image
             self.count += 1
@@ -353,6 +347,11 @@ class LoadImages:
 
     def __len__(self):
         return self.nf  # number of files
+
+
+
+
+
 
 
 class LoadStreams:
@@ -408,19 +407,22 @@ class LoadStreams:
             n += 1
             cap.grab()  # .read() = .grab() followed by .retrieve()
             if n % self.vid_stride == 0:
-                success, im0 = cap.retrieve()
-                if success:
+                success, im = cap.retrieve()
+                #huong add
+                mask = np.zeros(im.shape, dtype=np.uint8)
+                cv2.rectangle(mask, (620, 460), (1240, 910), (255, 255, 255), -1)
+                # cv2.rectangle(mask, (1629, 37), (1868, 116), (255, 255, 255), -1)
+                # cv2.rectangle(mask, (490, 35), (960, 320), (255, 255, 255), -1)
+                # cv2.rectangle(mask, (285, 77), (962, 318), (255, 255, 255), -1)
+                im = cv2.bitwise_and(im, mask)
 
-                    mask = np.zeros(im0.shape, dtype=np.uint8)
-                    # cv2.rectangle(mask, (550, 130), (1150, 590), (255, 255, 255), -1)  # x:y, x:y   #cam .1.60 check xốp dưới
-                    # cv2.rectangle(mask, (490, 35), (960, 320), (255, 255, 255), -1)                 #cam .1.56 check xốp trên
-                    cv2.rectangle(mask, (620, 217), (1248, 662), (255, 255, 255), -1)
-                    im0= cv2.bitwise_and(im0, mask)
-                    self.imgs[i] = im0
+                if success:
+                    self.imgs[i] = im
                 else:
                     LOGGER.warning('WARNING ⚠️ Video stream unresponsive, please check your IP camera connection.')
                     self.imgs[i] = np.zeros_like(self.imgs[i])
                     cap.open(stream)  # re-open stream if signal was lost
+                # cv2.rectangle(im, (506, 77), (962, 318), (0, 0, 255), 3)
             time.sleep(0.0)  # wait time
 
     def __iter__(self):
@@ -429,7 +431,9 @@ class LoadStreams:
 
     def __next__(self):
         self.count += 1
-        if not all(x.is_alive() for x in self.threads) or cv2.waitKey(1) == ord('q'):  # q to quit
+        self.current_time = datetime.now()
+        if not all(x.is_alive() for x in self.threads) or cv2.waitKey(1) == ord('q') or cv2.waitKey(1) ==27 or (str(self.current_time.hour) =="17" and
+        str(self.current_time.minute) =="10") :  # q to quit
             cv2.destroyAllWindows()
             raise StopIteration
 
@@ -445,7 +449,6 @@ class LoadStreams:
 
     def __len__(self):
         return len(self.sources)  # 1E12 frames = 32 streams at 30 FPS for 30 years
-
 
 def img2label_paths(img_paths):
     # Define label paths as a function of image paths
@@ -1161,7 +1164,7 @@ class HUBDatasetStats():
         # Save, print and return
         if save:
             stats_path = self.hub_dir / 'stats.json'
-            print(f'Saving {stats_path.resolve()}...')
+            # print(f'Saving {stats_path.resolve()}...')
             with open(stats_path, 'w') as f:
                 json.dump(self.stats, f)  # save stats.json
         if verbose:

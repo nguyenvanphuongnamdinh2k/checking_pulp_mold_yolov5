@@ -1,27 +1,21 @@
 
-import argparse
-import os
-import platform
-import sys
 from pathlib import Path
 
 import torch
 
 
 from models.common import DetectMultiBackend
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots
+from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots,LoadStreams
 from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr, cv2,
                            increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, smart_inference_mode
-import threading
-from threading import Thread
 import datetime
 from datetime import datetime, date
 import os
 import csv
 import serial
-from dataloaders import LoadStreams
+
 class yolov5():
     def __init__(self):
         self.xop_bottom = []   # khi xuất hiện xốp dưới,số lượng của xốp dưới sẽ append vào mảng này ( if c == 0 : self.xop_bottom.append(int(n))  183,184
@@ -39,8 +33,8 @@ class yolov5():
         self.timestamp1 = 0         # thời gian để reset tín hiệu sau 2 giây và để hiển thị tín hiệu done
         #############################################
         self.cover = 0                # cover trường hợp bắt thùng xốp thành máy in ( xảy ra vấn đề sẽ hiển thị thiếu 4 con dưới)           # phuong add
-
-
+        self.max_bottom = 0                # hoàng add
+        self.max_top = 0                     # hoàng add
         # self.port = "COM5"  # Thay thế bằng số cổng Serial mà Hercules Serial đang sử dụng trên máy tính của bạn        # phuong add
         # self.baudrate = 57600                                                                                           # phuong add
         # self.ser = serial.Serial(self.port, self.baudrate)                                                              # phuong add
@@ -83,7 +77,6 @@ class yolov5():
              agnostic_nms=False,  # class-agnostic NMS
              augment=False,  # augmented inference
              visualize=False,  # visualize features
-             update=False,  # update all models
              project='runs/detect',  # save results to project/name
              name='exp',  # save results to project/name
              exist_ok=False,  # existing project/name ok, do not increment
@@ -171,12 +164,14 @@ class yolov5():
                     # Rescale boxes from img_size to im0 size
                     det[:, :4] = scale_boxes(im.shape[2:], det[:, :4], im0.shape).round()
                     # Print results
+
                     for c in det[:, 5].unique():
                         a = 0  # ko có object trong khung hình
                         self.printer = 0
                         n = (det[:, 5] == c).sum()  # detections per class
                         s += f"{n} {names[int(c)]}{'s' * (n > 1)}, "  # add to string
                     # Write results
+
                     for *xyxy, conf, cls in reversed(det):
                         if save_txt:  # Write to file
                             xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
@@ -189,11 +184,11 @@ class yolov5():
                             label = None if hide_labels else (names[c] if hide_conf else f'{names[c]} {conf:.2f}')
                             annotator.box_label(xyxy, label, color=colors(c, True))
                             if c == 0:
-                                self.xop_bottom.append(int(n))
+                                self.xop_bottom.append(int(0))
                             if c == 1:
                                 self.printer = 1
                             if c == 3:
-                                self.xop_top.append(int(n))
+                                self.xop_top.append(int(3))
                             if c == 2:
                                 a = 1
                         if save_crop:
@@ -219,12 +214,20 @@ class yolov5():
                 '''
                 signal start
                 '''
+
                 if (self.printer == 0 and len(self.xop_bottom) != 0) or self.TG == 0:
                     self.bottom.append(len(self.xop_bottom))
-                    if len(self.bottom) >= 2:
+                    if len( self.bottom)>2:                 # hoàng add
+                        self.bottom = self.bottom[-2:]      # hoàng add
+                    # print("self.bottom:",self.bottom)
+                    if len(self.bottom) >= 2 :
                         x1 = self.bottom[-1]
                         x2 = self.bottom[-2]
-                        self.xop1.append(x1 - x2)
+                        if x1 - x2 > self.max_bottom:          # hoàng add
+                            self.max_bottom = x1 - x2          # hoàng add
+                            self.xop1.append(self.max_bottom)      # hoàng add
+                print("self.xop1", len(self.xop1))
+                print("self.bottom",len(self.bottom))
                 '''
                 signal stop
                 '''
@@ -235,6 +238,7 @@ class yolov5():
                     if len(self.xop1) != 0 and max(self.xop1) >= 4:
                         self.TG = 1
                         self.checkduoi = 1
+                        # self.bottom = []
                         self.xop_bottom = []
                         self.cover = 0  # phuong add
                         # self.hex_data = "02 F3 01 01 F5 03"  # phuong add
@@ -258,22 +262,25 @@ class yolov5():
                     cv2.putText(im0, 'duoi: OK', (60, 60), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 3)
                     if len(self.xop_top) != 0:
                         self.top.append(len(self.xop_top))
+                        if len(self.top) > 2:  # hoàng add
+                            self.top = self.top[-2:]  # hoàng add
                         if len(self.top) >= 2:
                             x1 = self.top[-1]
                             x2 = self.top[-2]
-                            self.xop2.append(x1 - x2)
+                            if x1 - x2 > self.max_top:  # hoàng add
+                                self.max_top = x1 - x2  # hoàng add
+                                self.xop2.append(self.max_top)  # hoàng add
                 '''
                 Reset kq
                 '''
                 if self.checkduoi == 1:
                     if self.box_rong == {0}:
-                        self.box = 1
+                        self.box = 1  # ko còn vật thể trong khung hình
 
-                if self.box == 1 and self.TG != 3:
-
-                    if len(self.xop2) != 0 and max(self.xop2) >= 4:
+                if self.box == 1 and self.TG != 3:          # khi ko có vật thể trong khung hình và ko có biến reset cuối cùng ( self.TG =3 )
+                    if len(self.xop2) != 0 and max(self.xop2) >= 4:         # khi mà đẩy đi mà số lượng xốp trên  >4 thì hiển thị OK( xốp trên )
                         cv2.putText(im0, 'tren: OK', (60, 200), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 3)
-                        self.TG = 2
+                        self.TG = 2         # đưa biến TG lên bằng 2
                         # self.hex_data = "02 F3 01 01 F5 03"  # phuong add
                         # self.byte_data = bytes.fromhex(self.hex_data)  # phuong add
                         # self.ser.write(self.byte_data)  # phuong add
@@ -297,7 +304,6 @@ class yolov5():
                 if self.timestamp1 < self.timestamp < self.timestamp1 + 5 and self.timestamp1 != 0:
                     # print('aaaa')
                     cv2.putText(im0, 'Done', (60, 400), cv2.FONT_HERSHEY_SIMPLEX, 3, (0, 0, 255), 4)
-
                 if self.timestamp > self.timestamp1 + 2 and self.timestamp1 != 0 and self.TG == 3 and self.box_rong == {
                     0}:
                     self.xop_bottom = []
@@ -316,14 +322,16 @@ class yolov5():
                     self.hex_data = None  # phuong add
                     self.TG_duoi = 0
                     self.TG_tren = 0
+                    self.max_top = 0
+                    self.max_bottom = 0
                 # ---------------------------------Start signal---------------------------------------------------------
 
                 # Stream results
                 im0 = annotator.result()
                 # print(self.printer)
 
-                im_copy = im0.copy()
-                im_copy = im_copy[460:910, 620:1240]
+                # im_copy = im0.copy()
+                # im_copy = im_copy[460:910, 620:1240]
                 if view_img:
                     cv2.putText(im0, str(datetime.now().strftime("%H:%M:%S")), (1330, 90), cv2.FONT_HERSHEY_SIMPLEX, 3,
                                 (0, 0, 255), 3)
@@ -331,9 +339,10 @@ class yolov5():
                                 (0, 255, 255), 2)
                     cv2.putText(im0, "tren:" + str(self.dem_tren), (610, 850), cv2.FONT_HERSHEY_SIMPLEX, 3,
                                 (0, 255, 255), 2)
+                    im0 = cv2.resize(im0, (1600, 870))
                     cv2.imshow('2a', im0)
-                    cv2.imshow('aaaaa', im_copy)
-                    cv2.waitKey(1)  # 1 millisecondq
+                    # cv2.imshow('aaaaa', im_copy)
+                    cv2.waitKey(1)  # 1 millisecond
 
                 # Save results (image with detections)
                 if save_img:
